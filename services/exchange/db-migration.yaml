@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+  namespace: exchnage
+  labels:
+    app: db-migration
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: db-migration
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: db-migrate
+        image: your-registry/crypto-exchange:v1
+        command:
+        - sh
+        - -c
+        - |
+          echo "Starting database migrations..."
+          cd /app/Exchange
+          python3 manage.py migrate --noinput
+          echo "Migrations completed successfully!"
+        env:
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: exchange-config
+              key: DEBUG
+        - name: DATABASE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: exchange-config
+              key: DATABASE_NAME
+        - name: DATABASE_USER
+          valueFrom:
+            configMapKeyRef:
+              name: exchange-config
+              key: DATABASE_USER
+        - name: DATABASE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: exchange-config
+              key: DATABASE_HOST
+        - name: DATABASE_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: exchange-config
+              key: DATABASE_PORT
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: exchange-secret
+              key: DATABASE_PASSWORD
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: exchange-secret
+              key: SECRET_KEY
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: exchange-secret
+              key: API_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
