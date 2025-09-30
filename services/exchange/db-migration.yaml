@@ -15,7 +15,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: db-migrate
-        image: your-registry/crypto-exchange:v1
+        image: your-registry/exchange:v1
         command:
         - sh
         - -c

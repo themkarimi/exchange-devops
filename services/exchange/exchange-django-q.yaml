@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: django-q-worker
-        image: your-registry/crypto-exchange:v1
+        image: your-registry/exchange:v1
         command:
         - sh
         - -c

@@ -1,0 +1,47 @@
+controller:
+  name: controller
+  kind: DaemonSet
+  image:
+    registry: registry.k8s.io
+  containerPort:
+    http: 80
+    https: 443
+  hostNetwork: true
+  tolerations:
+  - key: "node.kubernetes.io"
+    operator: "Exists"
+    effect: "NoSchedule"
+  config:
+    log-format-escape-json: "true"
+    log-format-stream: '{"time": "$time_iso8601","remote_addr": "$remote_addr","protocol":
+      "$protocol","status": $status,"bytes_sent": $bytes_sent,"bytes_received": $bytes_received,"session_time":"$session_time"}'
+    log-format-upstream: '{"time":"$time_iso8601","body":"$request_body","remote_addr":"$remote_addr","request_method":"$request_method","scheme":"$scheme","host":"$host","request_uri":"$request_uri","server_protocol":"$server_protocol","status":$status,"body_bytes_sent":$body_bytes_sent,"bytes_sent":$bytes_sent,"http_referer":"$http_referer","http_user_agent":"$http_user_agent","request_time":$request_time,"upstream_response_time":"$upstream_response_time","upstream_addr":"$upstream_addr","request_length":$request_length,"ssl_client_s_dn":"$ssl_client_s_dn","ssl_client_serial":"$ssl_client_serial","ssl_client_verify":"$ssl_client_verify","namespace":"$namespace","ingress_name":"$ingress_name","service_name":"$service_name","service_port":"$service_port","remote_user":"$remote_user"}'  
+  allowSnippetAnnotations: true
+  hostPort:
+    enabled: true
+    ports:
+      http: 80
+      https: 443
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true 
+  service:
+    type: ClusterIP
+  
+  watchIngressWithoutClass: true
+  ingressClassResource:
+    name: ingress-nginx
+    enabled: true
+    default: true
+    controllerValue: "k8s.io/ingress-nginx"
+
+  minAvailable: 1
+  admissionWebhooks:
+    patch:
+      enabled: true
+      image:
+        registry: registry.k8s.io
+    service:
+    serviceMonitor:
+      enabled: true

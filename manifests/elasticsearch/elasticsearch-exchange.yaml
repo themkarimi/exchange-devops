@@ -1,0 +1,229 @@
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: elasticsearch
+  namespace: elasticsearch
+spec:
+  version: 8.15.3
+  image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3 
+  nodeSets:
+  - name: elasticsearch
+    count: 1
+    config:
+      logger.org.elasticsearch: ERROR
+      # node.master: true
+      # node.data: true
+      # node.ingest: true
+      node.store.allow_mmap: false
+      action.auto_create_index: true  # Set to true to allow automatic index creation, or false to disable it.
+    podTemplate:
+      spec:
+        containers:
+        - name: elasticsearch
+          resources:
+            requests:
+              memory: 8Gi
+              cpu: 1
+            limits:
+              memory: 12Gi
+              cpu: 2
+          env:
+          - name: ES_JAVA_OPTS
+            value: "-Xms4g -Xmx4g"            
+        initContainers:
+        - name: sysctl
+          securityContext:
+            privileged: true
+          command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+        securityContext:
+          fsGroup: 1000
+        volumes:
+          - name: elasticsearch-data
+            persistentVolumeClaim:
+              claimName: elasticsearch-data   
+    volumeClaimTemplates:
+    - metadata:
+        name: elasticsearch-data
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: zfs-ssd
+  # http:
+  #   tls:
+  #     selfSignedCertificate:
+  #       disabled: true
+  # secureSettings:
+  #   secretName: "quickstart-es-secure-settings"                
+---
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: kibana
+  namespace: elasticsearch
+spec:
+  version: 8.15.3
+  image: docker.elastic.co/kibana/kibana:8.15.3
+  count: 1
+  elasticsearchRef:
+    name: elasticsearch
+    namespace: elasticsearch
+  config:
+    xpack.monitoring.ui.container.elasticsearch.enabled: true
+    xpack.monitoring.collection.enabled: true
+    server.publicBaseUrl: "https://kibana.mycompany.com"
+  podTemplate:
+    spec:
+      containers:
+      - name: kibana
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: 0.5
+          limits:
+            memory: 2Gi
+            cpu: 1
+  http:
+    tls:
+      selfSignedCertificate:
+        disabled: true
+    service:
+      spec:
+        type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-elasticsearch
+  namespace: elasticsearch
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: kibana.mycompany.com
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: kibana-kb-http
+              port:
+                number: 5601
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch-exporter
+  namespace: elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch-exporter
+  template:
+    metadata:
+      labels:
+        app: elasticsearch-exporter
+    spec:
+      containers:
+      - name: exporter
+        image: quay.io/prometheuscommunity/elasticsearch-exporter:latest
+        args:
+          - "--es.uri=https://elasticsearch-es-http:9200" 
+          - "--es.ca=/cert/tls.crt" 
+        securityContext:
+          runAsUser: 1000 
+        volumeMounts:
+          - name: ca
+            readOnly: true 
+            mountPath: "/cert/tls.crt"
+            subPath: "tls.crt"
+        resources:
+          requests:
+            memory: 64Mi
+            cpu: 500m
+          limits:
+            memory: 128Mi
+            cpu: 500m   
+        env:
+          - name: ES_USERNAME
+            value: elastic
+          - name: ES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: elasticsearch-es-elastic-user
+                key: elastic
+        ports:
+        - name: metrics
+          containerPort: 9114
+      volumes:
+        - name: ca
+          secret:
+            secretName: elasticsearch-es-http-ca-internal
+            items:
+              - key: tls.crt
+                path: tls.crt             
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-exporter
+  namespace: elasticsearch  
+  labels:
+    app: elasticsearch-exporter
+spec:
+  selector:
+    app: elasticsearch-exporter
+  ports:
+  - name: metrics
+    protocol: TCP
+    port: 9114
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: elasticsearch
+  namespace: elasticsearch  
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kibana-metrics
+  namespace: elasticsearch
+  labels:
+    app: kibana-exporter
+spec:
+  selector:
+    matchLabels:
+      app: kibana
+  endpoints:
+  - port: kibana-metrics
+    interval: 30s
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-np
+  namespace: elasticsearch
+spec:
+  type: NodePort
+  selector:
+    elasticsearch.k8s.elastic.co/cluster-name: elasticsearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+      nodePort: 30811
