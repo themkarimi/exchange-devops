@@ -1,6 +1,6 @@
 global:
-  imageRegistry: "docker.mofid.dev"
-  storageClass: "zfs-ssd"
+  imageRegistry: ""
+  storageClass: ""
   security:
     allowInsecureImages: true
 
