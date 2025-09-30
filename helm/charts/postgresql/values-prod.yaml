@@ -1,0 +1,70 @@
+global:
+  imageRegistry: "docker.mofid.dev"
+  storageClass: "zfs-ssd"
+  security:
+    allowInsecureImages: true
+
+architecture: replication
+
+auth:
+  enablePostgresUser: true
+  postgresPassword: "P@ssw0rd"
+  username: "exchange"
+  password: "exchange"
+  database: "exchange"
+  replicationUsername: repl_user
+  replicationPassword: "exchange-replication"
+
+replication:
+  synchronousCommit: "off"
+  numSynchronousReplicas: 0
+  applicationName: my_application
+
+image:
+  repository: bitnamilegacy/postgresql
+primary:
+  name: primary
+
+  persistence:
+    enabled: true
+    size: 8Gi
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+readReplicas:
+  replicaCount: 1 # Number of slave replicas
+  name: read
+  persistence:
+    enabled: true
+    size: 8Gi
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+backup:
+  enabled: true
+  cronjob:
+    schedule: "@daily"
+    timeZone: "Asia/Tehran"
+    concurrencyPolicy: Allow
+    failedJobsHistoryLimit: 1
+    successfulJobsHistoryLimit: 3
+    startingDeadlineSeconds: ""
+    ttlSecondsAfterFinished: ""
+    restartPolicy: OnFailure
+    storage:
+      enabled: true
+metrics:
+  enabled: true
+  image:
+    repository: bitnamilegacy/postgres-exporter
+  serviceMonitor:
+    enabled: true
