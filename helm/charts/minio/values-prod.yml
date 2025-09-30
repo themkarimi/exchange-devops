@@ -1,0 +1,46 @@
+global:
+  imageRegistry: ""
+  storageClass: ""
+  security:
+    allowInsecureImages: true
+
+mode: distributed
+statefulset:
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
+  replicaCount: 4
+  zones: 1
+  drivesPerNode: 2
+podAntiAffinityPreset: hard
+
+persistence:
+  size: 4Gi
+
+
+ingress:
+  enabled: true
+  hostname: s3-consol.myapp.com
+  path: '/'
+  annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: 512m
+apiIngress:
+  enabled: true
+  hostname: s3.myapp.com
+  path: '/'
+  annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: 512m
+
+
+metrics:
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: false 
+
+gateway:
+  autoscaling:
+    enabled: false
+
+image:
+  repository: bitnamilegacy/minio
