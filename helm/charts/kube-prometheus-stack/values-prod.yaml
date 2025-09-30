@@ -1,0 +1,178 @@
+kubeEtcd:
+  endpoints:
+    - 172.23.34.31
+    - 172.23.34.32
+    - 172.23.34.33
+  service:
+    port: 2381 
+    targetPort: 2381
+
+global:
+  imageRegistry: ""
+
+crds:
+  enabled: true
+  upgradeJob:
+    enabled: true
+    image:
+      kubectl:
+        repository: registry.k8s.io/kubectl
+
+alertmanager:
+  enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['alertname']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: 'null'
+      routes:
+        - matchers:
+          - severity=critical
+          receiver: critical-group
+
+    receivers:
+    - name: 'null'
+    - name: critical-group
+      webhook_configs:
+
+      - send_resolved: true
+        url: "http://alertbot/api/v2/alerts/prom"
+
+    templates:
+    - '/etc/alertmanager/config/*.tmpl'
+  ingress:
+    enabled: false
+  alertmanagerSpec:
+    image:
+      repository: quay.io/prometheus/alertmanager
+    retention: 120h
+    storage: 
+      volumeClaimTemplate:
+        spec:
+          storageClassName: ""
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+grafana:
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: prometheus
+        type: prometheus
+        url: http://prometheus-operated:9090
+        access: proxy
+        isDefault: false 
+  testFramework:
+    enabled: true
+    image: 
+      repository: bats/bats
+  downloadDashboardsImage:
+    repository: curlimages/curl
+  defaultDashboardsTimezone: Asia/Tehran
+  persistence:
+    type: statefulset
+    enabled: true
+    storageClassName: zfs-ssd
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
+    finalizers:
+      - kubernetes.io/pvc-protection
+  initChownData:
+    repository: docker.mofid.dev/library/busybox
+  env:
+    GF_SERVER_DOMAIN: monitoring.mycompany.com
+    GF_SERVER_ROOT_URL: https://monitoring.mycompany.com
+  
+  envFromSecret:
+    grafana-env-secret
+
+  grafana.ini:
+    # mofid config
+
+    server:
+      root_url: "https://monitoring.mycompany.com"
+      serve_from_sub_path: true
+      enable_gzip: true
+    analytics:
+      check_for_updates: false
+      reporting_enabled: false
+    security:
+      angular_support_enabled: true
+      cookie_secure: true  # because of https
+      disable_gravatar: true
+    snapshots:
+      external_enabled: false
+    users:
+      default_theme: dark
+      allow_sign_up: false
+      auto_assign_org: true
+      auto_assign_org_id: 1
+  adminUser: admin
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+    -  monitoring.mycompany.com
+    pathType: ImplementationSpecific
+    path: /
+  adminPassword: asdasd12eqwd
+  sidecar:
+    image:
+      repository: quay.io/kiwigrid/k8s-sidecar
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+
+prometheus-node-exporter:
+  image:
+    repository: quay.io/prometheus/node-exporter
+
+prometheusOperator:
+  admissionWebhooks:
+    patch:
+      image:
+        repository: registry.k8s.io/ingress-nginx/kube-webhook-certgen
+  image:
+    repository: quay.io/prometheus-operator/prometheus-operator
+  prometheusConfigReloader:
+    image:
+      repository: quay.io/prometheus-operator/prometheus-config-reloader
+
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    ruleSelectorNilUsesHelmValues: false
+    retention: 5d
+    service:
+      sessionAffinity: ClientIP
+    image:
+      repository: quay.io/prometheus/prometheus
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: ""
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 8Gi
+
+kube-state-metrics:
+  image:
+    repository: registry.k8s.io/kube-state-metrics/kube-state-metrics
+  ### added because of fluxCD metrics
+  extraArgs:
+    - --custom-resource-state-only=false
+  rbac:
+
+defaultRules:
+  create: true
