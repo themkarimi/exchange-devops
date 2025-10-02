@@ -9,10 +9,10 @@ statefulset:
   updateStrategy:
     type: RollingUpdate
   podManagementPolicy: Parallel
-  replicaCount: 4
+  replicaCount: 2
   zones: 1
   drivesPerNode: 2
-podAntiAffinityPreset: hard
+podAntiAffinityPreset: ""
 
 persistence:
   size: 4Gi
@@ -34,7 +34,7 @@ apiIngress:
 
 metrics:
   serviceMonitor:
-    enabled: true
+    enabled: false
   prometheusRule:
     enabled: false 
 

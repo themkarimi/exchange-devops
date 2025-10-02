@@ -2,12 +2,12 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: exchange-config
-  namespace: crypto-exchange
+  namespace: exchange
 data:
   DEBUG: "False"
   DATABASE_NAME: "exchange"
   DATABASE_USER: "exchange"
-  DATABASE_HOST: "postgres"
+  DATABASE_HOST: "db-postgresql-primary"
   DATABASE_PORT: "5432"
   ALLOWED_HOSTS: "*"
   # MinIO Configuration

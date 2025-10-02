@@ -27,7 +27,7 @@ primary:
 
   persistence:
     enabled: true
-    size: 8Gi
+    size: 1Gi
   resources:
     requests:
       memory: 256Mi
@@ -40,7 +40,7 @@ readReplicas:
   name: read
   persistence:
     enabled: true
-    size: 8Gi
+    size: 1Gi
   resources:
     requests:
       memory: 256Mi
@@ -67,4 +67,4 @@ metrics:
   image:
     repository: bitnamilegacy/postgres-exporter
   serviceMonitor:
-    enabled: true
+    enabled: false

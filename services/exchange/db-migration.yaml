@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: db-migration
-  namespace: exchnage
+  namespace: exchange
   labels:
     app: db-migration
 spec:
@@ -15,7 +15,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: db-migrate
-        image: your-registry/exchange:v1
+        image: themaxkarimi/exchange:v1
         command:
         - sh
         - -c
@@ -24,6 +24,8 @@ spec:
           cd /app/Exchange
           python3 manage.py migrate --noinput
           echo "Migrations completed successfully!"
+          python3 manage.py create_tokens
+          echo "Tokens Created"
         env:
         - name: DEBUG
           valueFrom:
@@ -53,17 +55,17 @@ spec:
         - name: DATABASE_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: exchange-secret
+              name: exchange
               key: DATABASE_PASSWORD
         - name: SECRET_KEY
           valueFrom:
             secretKeyRef:
-              name: exchange-secret
+              name: exchange
               key: SECRET_KEY
         - name: API_KEY
           valueFrom:
             secretKeyRef:
-              name: exchange-secret
+              name: exchange
               key: API_KEY
         resources:
           requests:
