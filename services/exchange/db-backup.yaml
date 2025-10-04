@@ -1,0 +1,136 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+  namespace: exchange
+  labels:
+    app: db-backup
+spec:
+  # Run daily at 2 AM
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: db-backup
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: backup
+            image: postgres:15-alpine
+            command:
+            - sh
+            - -c
+            - |
+              set -e
+              
+              echo "Starting database backup..."
+              
+              # Create timestamp for backup file
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_FILE="exchange_backup_${TIMESTAMP}.sql"
+              BACKUP_FILE_GZ="${BACKUP_FILE}.gz"
+              
+              # Perform database dump
+              echo "Dumping database ${DATABASE_NAME}..."
+              PGPASSWORD="${DATABASE_PASSWORD}" pg_dump \
+                -h "${DATABASE_HOST}" \
+                -p "${DATABASE_PORT}" \
+                -U "${DATABASE_USER}" \
+                -d "${DATABASE_NAME}" \
+                --no-owner \
+                --no-acl \
+                -F p \
+                -f "/tmp/${BACKUP_FILE}"
+              
+              # Compress the backup
+              echo "Compressing backup..."
+              gzip "/tmp/${BACKUP_FILE}"
+              
+              # Install MinIO client (mc)
+              echo "Installing MinIO client..."
+              wget -q https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc
+              chmod +x /usr/local/bin/mc
+              
+              # Configure MinIO client
+              echo "Configuring MinIO connection..."
+              mc alias set myminio "http://${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}"
+              
+              # Create bucket if it doesn't exist
+              BUCKET_NAME="database-backups"
+              mc mb "myminio/${BUCKET_NAME}" --ignore-existing
+              
+              # Upload backup to MinIO
+              echo "Uploading backup to MinIO..."
+              mc cp "/tmp/${BACKUP_FILE_GZ}" "myminio/${BUCKET_NAME}/${BACKUP_FILE_GZ}"
+              
+              # Verify upload
+              if mc ls "myminio/${BUCKET_NAME}/${BACKUP_FILE_GZ}" > /dev/null 2>&1; then
+                echo "Backup successfully uploaded to MinIO: ${BUCKET_NAME}/${BACKUP_FILE_GZ}"
+                
+                # Clean up local file
+                rm -f "/tmp/${BACKUP_FILE_GZ}"
+                
+                # Optional: Remove backups older than 30 days
+                echo "Cleaning up old backups (older than 30 days)..."
+                mc rm --recursive --force --older-than 30d "myminio/${BUCKET_NAME}/" || true
+                
+                echo "Backup completed successfully!"
+              else
+                echo "Error: Failed to upload backup to MinIO"
+                exit 1
+              fi
+            env:
+            - name: DATABASE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: exchange-config
+                  key: DATABASE_NAME
+            - name: DATABASE_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: exchange-config
+                  key: DATABASE_USER
+            - name: DATABASE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: exchange-config
+                  key: DATABASE_HOST
+            - name: DATABASE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: exchange-config
+                  key: DATABASE_PORT
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: exchange
+                  key: DATABASE_PASSWORD
+            - name: MINIO_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: exchange-config
+                  key: MINIO_ENDPOINT
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                configMapKeyRef:
+                  name: exchange-config
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: exchange
+                  key: MINIO_SECRET_KEY
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "250m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
